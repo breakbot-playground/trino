@@ -232,6 +232,21 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-compression</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-memory-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
         </dependency>
@@ -381,8 +396,10 @@
                             <excludes>
                                 <!-- If you are adding entry here also add an entry to cloud-tests or cloud-tests-case-insensitive-mapping profile below -->
                                 <exclude>**/TestBigQueryConnectorTest.java</exclude>
+                                <exclude>**/TestBigQueryArrowConnectorTest.java</exclude>
                                 <exclude>**/TestBigQueryMetadataCaching.java</exclude>
                                 <exclude>**/TestBigQueryTypeMapping.java</exclude>
+                                <exclude>**/TestBigQueryArrowTypeMapping.java</exclude>
                                 <exclude>**/TestBigQueryMetadata.java</exclude>
                                 <exclude>**/TestBigQueryInstanceCleaner.java</exclude>
                                 <exclude>**/TestBigQueryCaseInsensitiveMapping.java</exclude>
@@ -416,8 +433,10 @@
                         <configuration>
                             <includes>
                                 <include>**/TestBigQueryConnectorTest.java</include>
+                                <include>**/TestBigQueryArrowConnectorTest.java</include>
                                 <include>**/TestBigQueryMetadataCaching.java</include>
                                 <include>**/TestBigQueryTypeMapping.java</include>
+                                <include>**/TestBigQueryArrowTypeMapping.java</include>
                                 <include>**/TestBigQueryMetadata.java</include>
                                 <include>**/TestBigQueryInstanceCleaner.java</include>
                             </includes>
