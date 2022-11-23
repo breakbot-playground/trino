@@ -54,6 +54,7 @@ import static java.lang.String.format;
 public final class SystemSessionProperties
         implements SystemSessionPropertiesProvider
 {
+    public static final String LEGACY_UPDATE_DELETE_IMPLEMENTATION = "legacy_update_delete_implementation";
     public static final String OPTIMIZE_HASH_GENERATION = "optimize_hash_generation";
     public static final String JOIN_DISTRIBUTION_TYPE = "join_distribution_type";
     public static final String JOIN_MAX_BROADCAST_TABLE_SIZE = "join_max_broadcast_table_size";
@@ -175,6 +176,7 @@ public final class SystemSessionProperties
     public static final String USE_EXACT_PARTITIONING = "use_exact_partitioning";
     public static final String FORCE_SPILLING_JOIN = "force_spilling_join";
     public static final String FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED = "fault_tolerant_execution_event_driven_scheduler_enabled";
+    public static final String FORCE_FIXED_DISTRIBUTION_FOR_PARTITIONED_OUTPUT_OPERATOR_ENABLED = "force_fixed_distribution_for_partitioned_output_operator_enabled";
 
     private final List<PropertyMetadata<?>> sessionProperties;
 
@@ -203,6 +205,11 @@ public final class SystemSessionProperties
             NodeSchedulerConfig nodeSchedulerConfig)
     {
         sessionProperties = ImmutableList.of(
+                booleanProperty(
+                        LEGACY_UPDATE_DELETE_IMPLEMENTATION,
+                        "Use legacy UPDATE and DELETE implementation",
+                        featuresConfig.isLegacyUpdateDeleteImplementation(),
+                        true),
                 stringProperty(
                         EXECUTION_POLICY,
                         "Policy used for scheduling query tasks",
@@ -769,7 +776,7 @@ public final class SystemSessionProperties
                             if (value < 1.0) {
                                 throw new TrinoException(
                                         INVALID_SESSION_PROPERTY,
-                                        format("%s must be greater or equal to 1.0", RETRY_MAX_DELAY));
+                                        format("%s must be greater than or equal to 1.0", RETRY_DELAY_SCALE_FACTOR));
                             }
                         },
                         false),
@@ -865,6 +872,11 @@ public final class SystemSessionProperties
                         FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED,
                         "Enable event driven scheduler for fault tolerant execution",
                         queryManagerConfig.isFaultTolerantExecutionEventDrivenSchedulerEnabled(),
+                        true),
+                booleanProperty(
+                        FORCE_FIXED_DISTRIBUTION_FOR_PARTITIONED_OUTPUT_OPERATOR_ENABLED,
+                        "Force partitioned output operator to be run with fixed distribution",
+                        optimizerConfig.isForceFixedDistributionForPartitionedOutputOperatorEnabled(),
                         true));
     }
 
@@ -872,6 +884,11 @@ public final class SystemSessionProperties
     public List<PropertyMetadata<?>> getSessionProperties()
     {
         return sessionProperties;
+    }
+
+    public static boolean isLegacyUpdateDeleteImplementation(Session session)
+    {
+        return session.getSystemProperty(LEGACY_UPDATE_DELETE_IMPLEMENTATION, Boolean.class);
     }
 
     public static String getExecutionPolicy(Session session)
@@ -1547,5 +1564,10 @@ public final class SystemSessionProperties
     public static boolean isFaultTolerantExecutionEventDriverSchedulerEnabled(Session session)
     {
         return session.getSystemProperty(FAULT_TOLERANT_EXECUTION_EVENT_DRIVEN_SCHEDULER_ENABLED, Boolean.class);
+    }
+
+    public static boolean isForceFixedDistributionForPartitionedOutputOperatorEnabled(Session session)
+    {
+        return session.getSystemProperty(FORCE_FIXED_DISTRIBUTION_FOR_PARTITIONED_OUTPUT_OPERATOR_ENABLED, Boolean.class);
     }
 }

@@ -489,7 +489,7 @@ public class LogicalPlanner
         plan = planner.addRowFilters(
                 table,
                 plan,
-                failIfPredicateIsNotMet(metadata, session, PERMISSION_DENIED, AccessDeniedException.PREFIX + "Cannot insert row that does not match to a row filter"),
+                failIfPredicateIsNotMet(metadata, session, PERMISSION_DENIED, AccessDeniedException.PREFIX + "Cannot insert row that does not match a row filter"),
                 node -> {
                     Scope accessControlScope = analysis.getAccessControlScope(table);
                     // hidden fields are not accessible in insert
@@ -727,13 +727,14 @@ public class LogicalPlanner
 
     private RelationPlan createDeletePlan(Analysis analysis, Delete node)
     {
-        DeleteNode deleteNode = new QueryPlanner(analysis, symbolAllocator, idAllocator, buildLambdaDeclarationToSymbolMap(analysis, symbolAllocator), plannerContext, Optional.empty(), session, ImmutableMap.of())
+        PlanNode planNode = new QueryPlanner(analysis, symbolAllocator, idAllocator, buildLambdaDeclarationToSymbolMap(analysis, symbolAllocator), plannerContext, Optional.empty(), session, ImmutableMap.of())
                 .plan(node);
 
+        WriterTarget target = planNode instanceof DeleteNode ? ((DeleteNode) planNode).getTarget() : ((MergeWriterNode) planNode).getTarget();
         TableFinishNode commitNode = new TableFinishNode(
                 idAllocator.getNextId(),
-                deleteNode,
-                deleteNode.getTarget(),
+                planNode,
+                target,
                 symbolAllocator.newSymbol("rows", BIGINT),
                 Optional.empty(),
                 Optional.empty());
@@ -743,13 +744,14 @@ public class LogicalPlanner
 
     private RelationPlan createUpdatePlan(Analysis analysis, Update node)
     {
-        UpdateNode updateNode = new QueryPlanner(analysis, symbolAllocator, idAllocator, buildLambdaDeclarationToSymbolMap(analysis, symbolAllocator), plannerContext, Optional.empty(), session, ImmutableMap.of())
+        PlanNode planNode = new QueryPlanner(analysis, symbolAllocator, idAllocator, buildLambdaDeclarationToSymbolMap(analysis, symbolAllocator), plannerContext, Optional.empty(), session, ImmutableMap.of())
                 .plan(node);
 
+        WriterTarget target = planNode instanceof UpdateNode ? ((UpdateNode) planNode).getTarget() : ((MergeWriterNode) planNode).getTarget();
         TableFinishNode commitNode = new TableFinishNode(
                 idAllocator.getNextId(),
-                updateNode,
-                updateNode.getTarget(),
+                planNode,
+                target,
                 symbolAllocator.newSymbol("rows", BIGINT),
                 Optional.empty(),
                 Optional.empty());

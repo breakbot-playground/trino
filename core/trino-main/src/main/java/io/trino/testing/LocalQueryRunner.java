@@ -133,6 +133,7 @@ import io.trino.spi.PageIndexerFactory;
 import io.trino.spi.PageSorter;
 import io.trino.spi.Plugin;
 import io.trino.spi.connector.ConnectorFactory;
+import io.trino.spi.exchange.ExchangeManager;
 import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.type.TypeManager;
 import io.trino.spi.type.TypeOperators;
@@ -453,11 +454,11 @@ public class LocalQueryRunner
                 new CatalogSystemTable(metadata, accessControl),
                 new TableCommentSystemTable(metadata, accessControl),
                 new MaterializedViewSystemTable(metadata, accessControl),
-                new SchemaPropertiesSystemTable(transactionManager, schemaPropertyManager),
-                new TablePropertiesSystemTable(transactionManager, tablePropertyManager),
-                new MaterializedViewPropertiesSystemTable(transactionManager, materializedViewPropertyManager),
-                new ColumnPropertiesSystemTable(transactionManager, columnPropertyManager),
-                new AnalyzePropertiesSystemTable(transactionManager, analyzePropertyManager),
+                new SchemaPropertiesSystemTable(metadata, accessControl, schemaPropertyManager),
+                new TablePropertiesSystemTable(metadata, accessControl, tablePropertyManager),
+                new MaterializedViewPropertiesSystemTable(metadata, accessControl, materializedViewPropertyManager),
+                new ColumnPropertiesSystemTable(metadata, accessControl, columnPropertyManager),
+                new AnalyzePropertiesSystemTable(metadata, accessControl, analyzePropertyManager),
                 new TransactionsSystemTable(typeManager, transactionManager)),
                 ImmutableSet.of());
 
@@ -671,6 +672,12 @@ public class LocalQueryRunner
     public SplitManager getSplitManager()
     {
         return splitManager;
+    }
+
+    @Override
+    public ExchangeManager getExchangeManager()
+    {
+        return exchangeManagerRegistry.getExchangeManager();
     }
 
     @Override

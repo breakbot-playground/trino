@@ -42,6 +42,7 @@ import io.trino.spi.ErrorType;
 import io.trino.spi.Plugin;
 import io.trino.spi.QueryId;
 import io.trino.spi.eventlistener.EventListener;
+import io.trino.spi.exchange.ExchangeManager;
 import io.trino.spi.security.SystemAccessControl;
 import io.trino.spi.type.TypeManager;
 import io.trino.split.PageSourceManager;
@@ -358,6 +359,12 @@ public class DistributedQueryRunner
     }
 
     @Override
+    public ExchangeManager getExchangeManager()
+    {
+        return coordinator.getExchangeManager();
+    }
+
+    @Override
     public PageSourceManager getPageSourceManager()
     {
         return coordinator.getPageSourceManager();
@@ -602,7 +609,7 @@ public class DistributedQueryRunner
         private Map<String, String> extraProperties = new HashMap<>();
         private Map<String, String> coordinatorProperties = ImmutableMap.of();
         private Optional<Map<String, String>> backupCoordinatorProperties = Optional.empty();
-        private Consumer<QueryRunner> additionalSetup = querRunner -> {};
+        private Consumer<QueryRunner> additionalSetup = queryRunner -> {};
         private String environment = ENVIRONMENT;
         private Module additionalModule = EMPTY_MODULE;
         private Optional<Path> baseDataDir = Optional.empty();

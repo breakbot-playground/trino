@@ -37,6 +37,7 @@ import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorAccessControl;
 import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorMaterializedViewDefinition;
+import io.trino.spi.connector.ConnectorMergeSink;
 import io.trino.spi.connector.ConnectorMergeTableHandle;
 import io.trino.spi.connector.ConnectorMetadata;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
@@ -121,7 +122,7 @@ public class MockConnector
 {
     private static final String DELETE_ROW_ID = "delete_row_id";
     private static final String UPDATE_ROW_ID = "update_row_id";
-    private static final String MERGE_ROW_ID = "delete_row_id";
+    private static final String MERGE_ROW_ID = "merge_row_id";
 
     private final Function<ConnectorSession, List<String>> listSchemaNames;
     private final BiFunction<ConnectorSession, String, List<SchemaTableName>> listTables;
@@ -155,8 +156,10 @@ public class MockConnector
     private final Set<ConnectorTableFunction> tableFunctions;
     private final boolean supportsReportingWrittenBytes;
     private final boolean allowMissingColumnsOnInsert;
+    private final Supplier<List<PropertyMetadata<?>>> analyzeProperties;
     private final Supplier<List<PropertyMetadata<?>>> schemaProperties;
     private final Supplier<List<PropertyMetadata<?>>> tableProperties;
+    private final Supplier<List<PropertyMetadata<?>>> columnProperties;
     private final List<PropertyMetadata<?>> sessionProperties;
 
     MockConnector(
@@ -192,8 +195,10 @@ public class MockConnector
             Set<TableProcedureMetadata> tableProcedures,
             Set<ConnectorTableFunction> tableFunctions,
             boolean allowMissingColumnsOnInsert,
+            Supplier<List<PropertyMetadata<?>>> analyzeProperties,
             Supplier<List<PropertyMetadata<?>>> schemaProperties,
             Supplier<List<PropertyMetadata<?>>> tableProperties,
+            Supplier<List<PropertyMetadata<?>>> columnProperties,
             boolean supportsReportingWrittenBytes)
     {
         this.sessionProperties = ImmutableList.copyOf(requireNonNull(sessionProperties, "sessionProperties is null"));
@@ -229,8 +234,10 @@ public class MockConnector
         this.tableFunctions = requireNonNull(tableFunctions, "tableFunctions is null");
         this.supportsReportingWrittenBytes = supportsReportingWrittenBytes;
         this.allowMissingColumnsOnInsert = allowMissingColumnsOnInsert;
+        this.analyzeProperties = requireNonNull(analyzeProperties, "analyzeProperties is null");
         this.schemaProperties = requireNonNull(schemaProperties, "schemaProperties is null");
         this.tableProperties = requireNonNull(tableProperties, "tableProperties is null");
+        this.columnProperties = requireNonNull(columnProperties, "columnProperties is null");
     }
 
     @Override
@@ -324,6 +331,12 @@ public class MockConnector
     }
 
     @Override
+    public List<PropertyMetadata<?>> getAnalyzeProperties()
+    {
+        return analyzeProperties.get();
+    }
+
+    @Override
     public List<PropertyMetadata<?>> getTableProperties()
     {
         return tableProperties.get();
@@ -333,6 +346,12 @@ public class MockConnector
     public List<PropertyMetadata<?>> getMaterializedViewProperties()
     {
         return getMaterializedViewProperties.get();
+    }
+
+    @Override
+    public List<PropertyMetadata<?>> getColumnProperties()
+    {
+        return columnProperties.get();
     }
 
     private class MockConnectorMetadata
@@ -803,16 +822,25 @@ public class MockConnector
         {
             return new MockPageSink();
         }
+
+        @Override
+        public ConnectorMergeSink createMergeSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorMergeTableHandle mergeHandle, ConnectorPageSinkId pageSinkId)
+        {
+            return new MockPageSink();
+        }
     }
 
     private static class MockPageSink
-            implements ConnectorPageSink
+            implements ConnectorPageSink, ConnectorMergeSink
     {
         @Override
         public CompletableFuture<?> appendPage(Page page)
         {
             return NOT_BLOCKED;
         }
+
+        @Override
+        public void storeMergedRows(Page page) {}
 
         @Override
         public CompletableFuture<Collection<Slice>> finish()
@@ -845,7 +873,7 @@ public class MockConnector
                         ImmutableList.Builder<Object> projectedRow = ImmutableList.builder();
                         for (MockConnectorColumnHandle column : projection) {
                             String columnName = column.getName();
-                            if (columnName.equals(DELETE_ROW_ID) || columnName.equals(UPDATE_ROW_ID)) {
+                            if (columnName.equals(DELETE_ROW_ID) || columnName.equals(UPDATE_ROW_ID) || columnName.equals(MERGE_ROW_ID)) {
                                 projectedRow.add(0);
                                 continue;
                             }

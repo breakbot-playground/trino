@@ -353,6 +353,8 @@ public class HiveMetadata
 
     private static final String AUTO_PURGE_KEY = "auto.purge";
 
+    public static final String MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE = "Modifying Hive table rows is only supported for transactional tables";
+
     private final CatalogName catalogName;
     private final SemiTransactionalHiveMetastore metastore;
     private final boolean autoCommit;
@@ -904,6 +906,7 @@ public class HiveMetadata
         String tableName = schemaTableName.getTableName();
         List<String> partitionedBy = getPartitionedBy(tableMetadata.getProperties());
         Optional<HiveBucketProperty> bucketProperty = getBucketProperty(tableMetadata.getProperties());
+        boolean isTransactional = isTransactional(tableMetadata.getProperties()).orElse(false);
 
         if (bucketProperty.isPresent() && getAvroSchemaUrl(tableMetadata.getProperties()) != null) {
             throw new TrinoException(NOT_SUPPORTED, "Bucketing columns not supported when Avro schema url is set");
@@ -911,6 +914,10 @@ public class HiveMetadata
 
         if (bucketProperty.isPresent() && getAvroSchemaLiteral(tableMetadata.getProperties()) != null) {
             throw new TrinoException(NOT_SUPPORTED, "Bucketing/Partitioning columns not spported when Avro schema literal is set");
+        }
+
+        if (isTransactional) {
+            metastore.checkSupportsHiveAcidTransactions();
         }
 
         validateTimestampColumns(tableMetadata.getColumns(), getTimestampPrecision(session));
@@ -941,7 +948,6 @@ public class HiveMetadata
         }
         else {
             external = false;
-            boolean isTransactional = isTransactional(tableMetadata.getProperties()).orElse(false);
             if (isTransactional && isDelegateTransactionalManagedTableLocationToMetastore(session)) {
                 targetPath = Optional.empty();
             }
@@ -1483,6 +1489,10 @@ public class HiveMetadata
         }
 
         boolean isTransactional = isTransactional(tableMetadata.getProperties()).orElse(false);
+        if (isTransactional) {
+            metastore.checkSupportsHiveAcidTransactions();
+        }
+
         if (isTransactional && externalLocation.isEmpty() && isDelegateTransactionalManagedTableLocationToMetastore(session)) {
             throw new TrinoException(NOT_SUPPORTED, "CREATE TABLE AS is not supported for transactional tables without explicit location if location determining is delegated to metastore");
         }
@@ -1890,7 +1900,7 @@ public class HiveMetadata
         }
         // TODO: At some point we should add detection to see if the metastore supports
         //  transactional tables and just say merge isn't supported in the HMS
-        throw new TrinoException(NOT_SUPPORTED, "Hive merge is only supported for transactional tables");
+        throw new TrinoException(NOT_SUPPORTED, MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
@@ -1901,11 +1911,11 @@ public class HiveMetadata
         Table table = metastore.getTable(tableName.getSchemaName(), tableName.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(tableName));
 
-        if (!isTransactionalTable(table.getParameters())) {
-            throw new TrinoException(NOT_SUPPORTED, "Hive merge is only supported for transactional tables");
+        if (!isFullAcidTable(table.getParameters())) {
+            throw new TrinoException(NOT_SUPPORTED, MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
         }
 
-        HiveInsertTableHandle insertHandle = beginInsertOrMerge(session, tableHandle, retryMode, "Merging", true);
+        HiveInsertTableHandle insertHandle = beginInsertOrMerge(session, tableHandle, retryMode, "Merging into", true);
         return new HiveMergeTableHandle(hiveTableHandle.withTransaction(insertHandle.getTransaction()), insertHandle);
     }
 
@@ -1948,7 +1958,7 @@ public class HiveMetadata
     @Override
     public HiveInsertTableHandle beginInsert(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> columns, RetryMode retryMode)
     {
-        return beginInsertOrMerge(session, tableHandle, retryMode, "Inserting", false);
+        return beginInsertOrMerge(session, tableHandle, retryMode, "Inserting into", false);
     }
 
     private HiveInsertTableHandle beginInsertOrMerge(ConnectorSession session, ConnectorTableHandle tableHandle, RetryMode retryMode, String description, boolean isForMerge)
@@ -1961,19 +1971,19 @@ public class HiveMetadata
 
         for (Column column : table.getDataColumns()) {
             if (!isWritableType(column.getType())) {
-                throw new TrinoException(NOT_SUPPORTED, format("%s into Hive table %s with column type %s not supported", description, tableName, column.getType()));
+                throw new TrinoException(NOT_SUPPORTED, format("%s Hive table %s with column type %s not supported", description, tableName, column.getType()));
             }
         }
 
         boolean isTransactional = isTransactionalTable(table.getParameters());
         if (isTransactional && retryMode != NO_RETRIES) {
-            throw new TrinoException(NOT_SUPPORTED, "Inserting into Hive transactional tables is not supported with query retries enabled");
+            throw new TrinoException(NOT_SUPPORTED, description + " Hive transactional tables is not supported with query retries enabled");
         }
         if (isTransactional && !autoCommit) {
-            throw new TrinoException(NOT_SUPPORTED, "Inserting into Hive transactional tables is not supported in explicit transactions (use autocommit mode)");
+            throw new TrinoException(NOT_SUPPORTED, description + " Hive transactional tables is not supported in explicit transactions (use autocommit mode)");
         }
         if (isSparkBucketedTable(table)) {
-            throw new TrinoException(NOT_SUPPORTED, "Inserting into Spark bucketed tables is not supported");
+            throw new TrinoException(NOT_SUPPORTED, description + " Spark bucketed tables is not supported");
         }
 
         List<HiveColumnHandle> handles = hiveColumnHandles(table, typeManager, getTimestampPrecision(session)).stream()
@@ -1983,11 +1993,11 @@ public class HiveMetadata
         HiveStorageFormat tableStorageFormat = extractHiveStorageFormat(table);
         Optional.ofNullable(table.getParameters().get(SKIP_HEADER_COUNT_KEY)).map(Integer::parseInt).ifPresent(headerSkipCount -> {
             if (headerSkipCount > 1) {
-                throw new TrinoException(NOT_SUPPORTED, format("%s into Hive table with value of %s property greater than 1 is not supported", description, SKIP_HEADER_COUNT_KEY));
+                throw new TrinoException(NOT_SUPPORTED, format("%s Hive table with value of %s property greater than 1 is not supported", description, SKIP_HEADER_COUNT_KEY));
             }
         });
         if (table.getParameters().containsKey(SKIP_FOOTER_COUNT_KEY)) {
-            throw new TrinoException(NOT_SUPPORTED, format("%s into Hive table with %s property not supported", description, SKIP_FOOTER_COUNT_KEY));
+            throw new TrinoException(NOT_SUPPORTED, format("%s Hive table with %s property not supported", description, SKIP_FOOTER_COUNT_KEY));
         }
         LocationHandle locationHandle = locationService.forExistingTable(metastore, session, table);
 

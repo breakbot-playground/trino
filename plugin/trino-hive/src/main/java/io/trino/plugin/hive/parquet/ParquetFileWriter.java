@@ -14,6 +14,7 @@
 package io.trino.plugin.hive.parquet;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.filesystem.TrinoOutputFile;
 import io.trino.parquet.ParquetDataSource;
 import io.trino.parquet.writer.ParquetWriter;
 import io.trino.parquet.writer.ParquetWriterOptions;
@@ -62,7 +63,7 @@ public class ParquetFileWriter
     private long validationCpuNanos;
 
     public ParquetFileWriter(
-            OutputStream outputStream,
+            TrinoOutputFile outputFile,
             Closeable rollbackAction,
             List<Type> fileColumnTypes,
             List<String> fileColumnNames,
@@ -72,10 +73,12 @@ public class ParquetFileWriter
             int[] fileInputColumnIndexes,
             CompressionCodecName compressionCodecName,
             String trinoVersion,
+            boolean useBatchColumnReadersForVerification,
             Optional<DateTimeZone> parquetTimeZone,
             Optional<Supplier<ParquetDataSource>> validationInputFactory)
+            throws IOException
     {
-        requireNonNull(outputStream, "outputStream is null");
+        OutputStream outputStream = outputFile.create();
         requireNonNull(trinoVersion, "trinoVersion is null");
         this.validationInputFactory = requireNonNull(validationInputFactory, "validationInputFactory is null");
 
@@ -86,6 +89,7 @@ public class ParquetFileWriter
                 parquetWriterOptions,
                 compressionCodecName,
                 trinoVersion,
+                useBatchColumnReadersForVerification,
                 parquetTimeZone,
                 validationInputFactory.isPresent()
                         ? Optional.of(new ParquetWriteValidationBuilder(fileColumnTypes, fileColumnNames))

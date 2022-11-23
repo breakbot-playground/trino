@@ -115,6 +115,7 @@ import static io.trino.plugin.hive.HiveColumnHandle.FILE_MODIFIED_TIME_COLUMN_NA
 import static io.trino.plugin.hive.HiveColumnHandle.FILE_SIZE_COLUMN_NAME;
 import static io.trino.plugin.hive.HiveColumnHandle.PARTITION_COLUMN_NAME;
 import static io.trino.plugin.hive.HiveColumnHandle.PATH_COLUMN_NAME;
+import static io.trino.plugin.hive.HiveMetadata.MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE;
 import static io.trino.plugin.hive.HiveQueryRunner.HIVE_CATALOG;
 import static io.trino.plugin.hive.HiveQueryRunner.TPCH_SCHEMA;
 import static io.trino.plugin.hive.HiveQueryRunner.createBucketedSession;
@@ -271,42 +272,42 @@ public abstract class BaseHiveConnectorTest
     public void testDelete()
     {
         assertThatThrownBy(super::testDelete)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testDeleteWithLike()
     {
         assertThatThrownBy(super::testDeleteWithLike)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testDeleteWithComplexPredicate()
     {
         assertThatThrownBy(super::testDeleteWithComplexPredicate)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testDeleteWithSemiJoin()
     {
         assertThatThrownBy(super::testDeleteWithSemiJoin)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testDeleteWithSubquery()
     {
         assertThatThrownBy(super::testDeleteWithSubquery)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testUpdate()
     {
         assertThatThrownBy(super::testUpdate)
-                .hasMessage("Hive update is only supported for ACID transactional tables");
+                .hasMessage(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
@@ -317,42 +318,49 @@ public abstract class BaseHiveConnectorTest
         assertThatThrownBy(super::testUpdateRowConcurrently)
                 .hasMessage("Unexpected concurrent update failure")
                 .getCause()
-                .hasMessage("Hive update is only supported for ACID transactional tables");
+                .hasMessage(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testUpdateWithPredicates()
     {
         assertThatThrownBy(super::testUpdateWithPredicates)
-                .hasMessage("Hive update is only supported for ACID transactional tables");
+                .hasMessage(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
+    }
+
+    @Override
+    public void testUpdateRowType()
+    {
+        assertThatThrownBy(super::testUpdateRowType)
+                .hasMessage(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testUpdateAllValues()
     {
         assertThatThrownBy(super::testUpdateAllValues)
-                .hasMessage("Hive update is only supported for ACID transactional tables");
+                .hasMessage(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testExplainAnalyzeWithDeleteWithSubquery()
     {
         assertThatThrownBy(super::testExplainAnalyzeWithDeleteWithSubquery)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testDeleteWithVarcharPredicate()
     {
         assertThatThrownBy(super::testDeleteWithVarcharPredicate)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Override
     public void testRowLevelDelete()
     {
         assertThatThrownBy(super::testRowLevelDelete)
-                .hasStackTraceContaining("Deletes must match whole partitions for non-transactional tables");
+                .hasStackTraceContaining(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
     }
 
     @Test(dataProvider = "queryPartitionFilterRequiredSchemasDataProvider")
@@ -2152,7 +2160,7 @@ public abstract class BaseHiveConnectorTest
                 "INSERT INTO " + tableName + " VALUES ('a0', 'b0', 'c0')",
                 1,
                 // buckets should be repartitioned locally hence local repartitioned exchange should exist in plan
-                assertLocalRepartitionedExchangesCount(1));
+                assertLocalRepartitionedExchangesCount(2));
         assertUpdate(parallelWriter, "INSERT INTO " + tableName + " VALUES ('a1', 'b1', 'c1')", 1);
 
         assertQuery("SELECT * from " + tableName, "VALUES ('a', 'b', 'c'), ('aa', 'bb', 'cc'), ('aaa', 'bbb', 'ccc'), ('a0', 'b0', 'c0'), ('a1', 'b1', 'c1')");
@@ -3634,7 +3642,7 @@ public abstract class BaseHiveConnectorTest
 
         assertThatThrownBy(() -> getQueryRunner().execute("DELETE FROM test_metadata_delete WHERE ORDER_KEY=1"))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessage("Deletes must match whole partitions for non-transactional tables");
+                .hasMessage(MODIFYING_NON_TRANSACTIONAL_TABLE_MESSAGE);
 
         assertQuery("SELECT * FROM test_metadata_delete", "SELECT orderkey, linenumber, linestatus FROM lineitem WHERE linestatus<>'O' AND linenumber<>3");
 
@@ -4120,8 +4128,7 @@ public abstract class BaseHiveConnectorTest
                         "   orc_bloom_filter_columns = ARRAY['c1','c 2'],\n" +
                         "   orc_bloom_filter_fpp = 7E-1,\n" +
                         "   partitioned_by = ARRAY['c5'],\n" +
-                        "   sorted_by = ARRAY['c1','c 2 DESC'],\n" +
-                        "   transactional = true\n" +
+                        "   sorted_by = ARRAY['c1','c 2 DESC']\n" +
                         ")",
                 getSession().getCatalog().get(),
                 getSession().getSchema().get(),
@@ -8335,6 +8342,13 @@ public abstract class BaseHiveConnectorTest
                 "EXPLAIN ANALYZE VERBOSE SELECT * FROM (SELECT nationkey, count(*) cnt FROM nation GROUP BY 1) where cnt > 0",
                 "'Filter CPU time' = \\{duration=.*}",
                 "'Projection CPU time' = \\{duration=.*}");
+    }
+
+    @Test
+    public void testCreateAcidTableUnsupported()
+    {
+        assertQueryFails("CREATE TABLE acid_unsupported (x int) WITH (transactional = true)", "FileHiveMetastore does not support ACID tables");
+        assertQueryFails("CREATE TABLE acid_unsupported WITH (transactional = true) AS SELECT 123 x", "FileHiveMetastore does not support ACID tables");
     }
 
     private static final Set<HiveStorageFormat> NAMED_COLUMN_ONLY_FORMATS = ImmutableSet.of(HiveStorageFormat.AVRO, HiveStorageFormat.JSON);

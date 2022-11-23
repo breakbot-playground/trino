@@ -36,6 +36,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import org.testng.annotations.Test;
 
 import java.util.List;
 import java.util.Map;
@@ -98,20 +99,12 @@ public class BenchmarkInformationSchema
                             .map(i -> "stream_" + i)
                             .collect(toImmutableList());
 
-                    BiFunction<ConnectorSession, String, List<SchemaTableName>> listTables = (session, schemaNameOrNull) -> {
+                    BiFunction<ConnectorSession, String, List<SchemaTableName>> listTables = (session, schemaName) -> {
                         List<String> tables = IntStream.range(0, Integer.parseInt(tablesCount))
                                 .boxed()
                                 .map(i -> "table_" + i)
                                 .collect(toImmutableList());
-                        List<String> schemas;
-                        if (schemaNameOrNull == null) {
-                            schemas = listSchemaNames.apply(session);
-                        }
-                        else {
-                            schemas = ImmutableList.of(schemaNameOrNull);
-                        }
-                        return schemas.stream()
-                                .flatMap(schema -> tables.stream().map(table -> new SchemaTableName(schema, table)))
+                        return tables.stream().map(table -> new SchemaTableName(schemaName, table))
                                 .collect(toImmutableList());
                     };
 
@@ -140,6 +133,20 @@ public class BenchmarkInformationSchema
     public MaterializedResult queryInformationSchema(BenchmarkData benchmarkData)
     {
         return benchmarkData.queryRunner.execute(benchmarkData.query);
+    }
+
+    @Test
+    public void test()
+            throws Exception
+    {
+        BenchmarkData data = new BenchmarkData();
+        data.setup();
+        try {
+            queryInformationSchema(data);
+        }
+        finally {
+            data.tearDown();
+        }
     }
 
     public static void main(String[] args)
